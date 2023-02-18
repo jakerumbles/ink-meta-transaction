@@ -7,6 +7,7 @@ mod ink_meta_transaction {
     // use ink_env::AccountId;
     // use ink::storage::Mapping;
     use ink_storage::Mapping;
+    use scale::Encode;
     use sha3::{Digest, Keccak256};
 
     pub type Nonce = u128;
@@ -89,10 +90,25 @@ mod ink_meta_transaction {
         }
 
         #[ink(message)]
-        pub fn verfiy(&self, req: Transaction, signature: [u8; 32]) -> bool {
-            match self.env().ecdsa_recover(signature, message_hash) {
+        pub fn verfiy(&self, req: Transaction, signature: [u8; 65]) -> bool {
+            let encoded_msg = req.encode();
+            let message_hash = Keccak256::digest(encoded_msg).to_vec();
+            match self
+                .env()
+                .ecdsa_recover(&signature, &message_hash[..].try_into().unwrap())
+            {
                 Ok(pub_key) => {
-                    // Match pub_key with something
+                    // Match recovered pub_key with caller
+                    let caller = self.env().caller();
+                    let pub_key_32 = Keccak256::digest(&pub_key).to_vec();
+                    dbg!("caller: {}", caller);
+                    dbg!("pub_key: {}", pub_key_32);
+                    // let acc_id = AccountId::from(pub_key);
+                    // if acc_id == caller {
+                    //     return true;
+                    // } else {
+                    //     return false;
+                    // }
                     true
                 }
                 Err(_) => return false,
@@ -124,6 +140,10 @@ mod ink_meta_transaction {
     mod tests {
         /// Imports all the definitions from the outer scope so we can use them here.
         use super::*;
+        use sp_application_crypto::ecdsa::Pair;
+        use sp_application_crypto::Pair as PairT;
+        use sp_core::hexdisplay::HexDisplay;
+        use sp_runtime::traits::BlakeTwo256;
 
         /// Imports `ink_lang` so we can use `#[ink::test]`.
         use ink_lang as ink;
@@ -133,6 +153,35 @@ mod ink_meta_transaction {
             let meta = InkMetaTransaction::default();
             assert_eq!(meta.get_nonce(AccountId::from([0; 32])), 0);
             assert_eq!(meta.get_nonce(AccountId::from([9; 32])), 0);
+        }
+
+        #[ink::test]
+        fn verify_works() {
+            let meta = InkMetaTransaction::default();
+            let pair = alice();
+
+            let t = Transaction {
+                callee: AccountId::from([0u8; 32]),
+                selector: [0u8; 4],
+                input: vec![1, 2, 3, 4],
+                transferred_value: 0,
+                gas_limit: 100_000,
+                allow_reentry: false,
+                nonce: 0,
+            };
+
+            let signature = pair.sign(t.encode().as_ref());
+
+            let valid = meta.verfiy(t, *signature.as_ref());
+        }
+
+        fn alice() -> Pair {
+            let alice = sp_application_crypto::ecdsa::Pair::from_string("//Alice", None).unwrap();
+            // let pub_key = alice.public().0;
+            // let address: [u8; 32] = BlakeTwo256::hash(&pub_key).to_fixed_bytes();
+            // dbg!("{}", HexDisplay::from(&address));
+
+            alice
         }
 
         // #[ink::test]
