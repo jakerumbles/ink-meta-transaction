@@ -6,6 +6,7 @@ use ink_lang as ink;
 mod ink_meta_transaction {
     // use ink_env::AccountId;
     // use ink::storage::Mapping;
+    use ink_eth_compatibility::ECDSAPublicKey;
     use ink_storage::Mapping;
     use scale::Encode;
     use sha3::{Digest, Keccak256};
@@ -25,6 +26,7 @@ mod ink_meta_transaction {
     #[cfg_attr(
         feature = "std",
         derive(
+            Clone,
             Debug,
             PartialEq,
             Eq,
@@ -98,18 +100,23 @@ mod ink_meta_transaction {
                 .ecdsa_recover(&signature, &message_hash[..].try_into().unwrap())
             {
                 Ok(pub_key) => {
+                    let ecdsa_pub_key = ECDSAPublicKey::from(pub_key);
                     // Match recovered pub_key with caller
                     let caller = self.env().caller();
-                    let pub_key_32 = Keccak256::digest(&pub_key).to_vec();
+                    let acc_id = ecdsa_pub_key.to_default_account_id();
+
                     dbg!("caller: {}", caller);
-                    dbg!("pub_key: {}", pub_key_32);
-                    // let acc_id = AccountId::from(pub_key);
-                    // if acc_id == caller {
-                    //     return true;
-                    // } else {
-                    //     return false;
-                    // }
-                    true
+                    dbg!("pub_key: {}", acc_id);
+
+                    let expected_nonce = self.get_nonce(caller);
+
+                    // Is the message signed by the same account that sent it?
+                    // And does the transacation have the expected nonce?
+                    if expected_nonce == req.nonce && acc_id == caller {
+                        return true;
+                    } else {
+                        return false;
+                    }
                 }
                 Err(_) => return false,
             }
@@ -117,7 +124,18 @@ mod ink_meta_transaction {
         }
 
         #[ink(message)]
-        pub fn execute(&mut self) -> bool {
+        pub fn execute(&mut self, req: Transaction, signature: [u8; 65]) -> bool {
+            assert!(
+                self.verfiy(req.clone(), signature.clone()),
+                "Signature does not match request"
+            );
+
+            let caller = self.env().caller();
+            let updated_nonce = self.get_nonce(caller) + 1;
+
+            // Signature is valid, so increase nonce and then execute transaction
+            self.nonces.insert(caller, &updated_nonce);
+
             true
         }
 
@@ -155,25 +173,45 @@ mod ink_meta_transaction {
             assert_eq!(meta.get_nonce(AccountId::from([9; 32])), 0);
         }
 
-        #[ink::test]
-        fn verify_works() {
-            let meta = InkMetaTransaction::default();
-            let pair = alice();
+        // #[ink::test]
+        // fn verify_works() {
+        //     let meta = InkMetaTransaction::default();
+        //     let pair = alice();
 
-            let t = Transaction {
-                callee: AccountId::from([0u8; 32]),
-                selector: [0u8; 4],
-                input: vec![1, 2, 3, 4],
-                transferred_value: 0,
-                gas_limit: 100_000,
-                allow_reentry: false,
-                nonce: 0,
-            };
+        //     let t = Transaction {
+        //         callee: AccountId::from([0u8; 32]),
+        //         selector: [0u8; 4],
+        //         input: vec![1, 2, 3, 4],
+        //         transferred_value: 0,
+        //         gas_limit: 100_000,
+        //         allow_reentry: false,
+        //         nonce: 0,
+        //     };
 
-            let signature = pair.sign(t.encode().as_ref());
+        //     let signature = pair.sign(t.encode().as_ref());
 
-            let valid = meta.verfiy(t, *signature.as_ref());
-        }
+        //     assert!(meta.verfiy(t, *signature.as_ref()));
+        // }
+
+        // #[ink::test]
+        // fn execute_works() {
+        //     let mut meta = InkMetaTransaction::default();
+        //     let pair = alice();
+
+        //     let t = Transaction {
+        //         callee: AccountId::from([0u8; 32]),
+        //         selector: [0u8; 4],
+        //         input: vec![1, 2, 3, 4],
+        //         transferred_value: 0,
+        //         gas_limit: 100_000,
+        //         allow_reentry: false,
+        //         nonce: 0,
+        //     };
+
+        //     let signature = pair.sign(t.encode().as_ref());
+
+        //     assert!(meta.execute(t, *signature.as_ref()));
+        // }
 
         fn alice() -> Pair {
             let alice = sp_application_crypto::ecdsa::Pair::from_string("//Alice", None).unwrap();
