@@ -63,6 +63,10 @@ mod inkmetatransaction {
         TransactionFailed,
         ValueTransferMismatch,
         TransactionExpired,
+        // Submitted nonce does match expected
+        IncorrectNonce,
+        // Signature does not match transaction
+        IncorrectSignature,
     }
 
     #[ink(storage)]
@@ -85,8 +89,11 @@ mod inkmetatransaction {
         }
 
         #[ink(message)]
-        pub fn verfiy(&self, req: Transaction, signature: [u8; 65]) -> bool {
-            let encoded_msg = req.encode();
+        pub fn verfiy(&self, req: Transaction, signature: [u8; 65]) -> Result<bool, Error> {
+            ink::env::debug_println!("req.callee: {:?}", req.callee);
+
+            let encoded_msg: Vec<u8> = req.encode();
+            ink::env::debug_println!("Encoded message Vec<u8>: {:?}", encoded_msg);
             // let message_hash = Keccak256::digest(encoded_msg).to_vec();
             let message_hash = Self::keccak256_hash(encoded_msg);
             match self.env().ecdsa_recover(&signature, &message_hash) {
@@ -100,43 +107,32 @@ mod inkmetatransaction {
                     // Is the message signed by the same account that sent it?
                     // And does the transacation have the expected nonce?
                     // if expected_nonce == req.nonce && acc_id == caller_bytes {
-                    if expected_nonce == req.nonce && acc_id == caller {
-                        return true;
+                    if expected_nonce != req.nonce {
+                        return Err(Error::IncorrectNonce);
+                    }
+                    if acc_id != caller {
+                        return Err(Error::IncorrectSignature);
                     } else {
-                        return false;
+                        return Ok(true);
                     }
                 }
-                Err(_) => return false,
+                Err(_) => return Err(Error::IncorrectSignature),
             }
         }
 
         #[ink(message, payable)]
         pub fn execute(&mut self, req: Transaction, signature: [u8; 65]) -> Result<(), Error> {
-            // assert!(
-            //     self.verfiy(req.clone(), signature.clone()),
-            //     "Signature does not match request"
-            // );
-
-            if self.verfiy(req.clone(), signature.clone()) == false {
+            // Signature must be correct
+            if let Err(_) = self.verfiy(req.clone(), signature.clone()) {
                 return Err(Error::BadSignature);
             }
 
-            // Assert that the correct amount of tokens was sent to this contract instance with this fn call
-            // assert!(
-            //     self.env().transferred_value() == req.transferred_value,
-            //     "Incorrect value transferred to contract"
-            // );
-
+            // Assert that the correct amount of tokens were sent to this contract instance with this fn call
             if self.env().transferred_value() != req.transferred_value {
                 return Err(Error::ValueTransferMismatch);
             }
 
             // Assert that the transaction hasn't already expired
-            // assert!(
-            //     self.env().block_timestamp() < req.expiration_time_seconds,
-            //     "Transaction already expired"
-            // );
-
             if self.env().block_timestamp() >= req.expiration_time_seconds {
                 return Err(Error::TransactionExpired);
             }

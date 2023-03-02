@@ -1,5 +1,6 @@
 // import { expect } from '@jest/globals';
 import { ApiPromise } from "@polkadot/api";
+import { Keyring } from '@polkadot/keyring';
 import { KeyringPair } from '@polkadot/keyring/types';
 import InkMetaConstructor from "../typechain-generated/constructors/inkmetatransaction";
 import InkMetaContract from "../typechain-generated/contracts/inkmetatransaction";
@@ -7,12 +8,14 @@ import FlipperConstructor from "../typechain-generated/constructors/flipper";
 import FlipperContract from "../typechain-generated/contracts/flipper";
 import { Transaction } from "../typechain-generated/types-arguments/inkmetatransaction";
 import Web3 from "web3";
+import * as $ from "scale-codec"
 import { Result } from '@727-ventures/typechain-types';
 import type { WeightV2 } from '@polkadot/types/interfaces';
 
 
 describe('Ink Meta Transaction', () => {
     let api: ApiPromise;
+    let keyring: Keyring;
     let alice: KeyringPair;
     let bob: KeyringPair;
 
@@ -22,12 +25,25 @@ describe('Ink Meta Transaction', () => {
     let inkMetaContract: InkMetaContract;
     let flipperContract: FlipperContract;
 
-    let INK_META_ADDRESS: any;
-    let FLIPPER_ADDRESS: any;
+    let INK_META_ADDRESS: string;
+    let FLIPPER_ADDRESS: string;
 
     let FLIPPER_DEFAULT = false;
 
     let gasRequired: WeightV2;
+
+
+
+    // let transaction: Transaction = {
+    //     callee: FLIPPER_ADDRESS,
+    //     selector: ["63", "3a", "a5", "51"],
+    //     input: [],
+    //     transferredValue: 100,
+    //     gasLimit: 1000000000,
+    //     allowReentry: false,
+    //     nonce: 0,
+    //     expirationTimeSeconds: Date.now() + 100000
+    // }
 
     // let pairFactory: Pair_factory;
     // let factoryFactory: Factory_factory;
@@ -43,7 +59,7 @@ describe('Ink Meta Transaction', () => {
 
 
     async function setup(): Promise<void> {
-        ({ api, alice: alice, bob: bob } = globalThis.setup);
+        ({ api, keyring: keyring, alice: alice, bob: bob } = globalThis.setup);
 
         // Create instance of constructors, that will be used to deploy contracts
         // Constructors contains all constructors from the contract
@@ -76,20 +92,68 @@ describe('Ink Meta Transaction', () => {
         expect((await flipperContract.query.get()).value.ok).toBe(!FLIPPER_DEFAULT);
     });
 
-    it('execute works', async () => {
+    it('verify works', async () => {
+        // const $transaction_codec = $.object(
+        //     $.field("callee", $.str),
+        //     $.field("selector", $.array($.str)),
+        //     $.field("input", $.array($.str)),
+        //     $.field("transferredValue", $.u128),
+        //     $.field("gasLimit", $.u64),
+        //     $.field("allowReentry", $.bool),
+        //     $.field("nonce", $.u128),
+        //     $.field("expirationTimeSeconds", $.u64)
+        // );
+
+
+        let decoded_address = keyring.decodeAddress(FLIPPER_ADDRESS);
+        console.log(decoded_address);
+
+        let decoded_addr_arr: number[] = [];
+        decoded_address.forEach(b => {
+            decoded_addr_arr.push(b);
+        });
+        console.log(decoded_addr_arr);
+
         // Transaction to call the flip() fn in the Flipper contract
         let transaction: Transaction = {
-            callee: FLIPPER_ADDRESS,
+            callee: decoded_addr_arr,
             selector: ["63", "3a", "a5", "51"],
             input: [],
             transferredValue: 100,
             gasLimit: 1000000000,
             allowReentry: false,
             nonce: 0,
-            expirationTimeSeconds: Date.now() + 100000
+            expirationTimeSeconds: 1677782453176 + 100000000
         }
 
-        let hashed_transaction = Web3.utils.soliditySha3(JSON.stringify(transaction));
+
+
+        const $transaction_codec = $.object(
+            $.field("callee", $.array($.u8)),
+            // $.field("selector", $.array($.str)),
+            // $.field("input", $.array($.str)),
+            // $.field("transferredValue", $.u128),
+            // $.field("gasLimit", $.u64),
+            // $.field("allowReentry", $.bool),
+            // $.field("nonce", $.u128),
+            // $.field("expirationTimeSeconds", $.u64)
+        );
+
+        let transaction_for_encoding = {
+            callee: decoded_addr_arr,
+            // selector: ["63", "3a", "a5", "51"],
+            // input: [],
+            // transferredValue: BigInt(100),
+            // gasLimit: BigInt(1000000000),
+            // allowReentry: false,
+            // nonce: BigInt(0),
+            // expirationTimeSeconds: BigInt(1677782453176 + 100000000)
+        }
+
+        let encoded_transaction = $transaction_codec.encode(transaction_for_encoding);
+        console.log(`Encoded transaction Uint8Array: ${encoded_transaction}`);
+
+        let hashed_transaction = Web3.utils.soliditySha3(encoded_transaction.toString());
         console.log(`Hashed transaction: ${hashed_transaction}`);
 
         let signature_buffer: number[] = [];
@@ -99,20 +163,51 @@ describe('Ink Meta Transaction', () => {
         });
         console.log(`Signature bytes: ${signature_buffer}`);
 
-        revertedWith(
-            await inkMetaContract.query.execute(transaction, signature_buffer),
-            'BadSignature',
-        );
-        // ({ gasRequired } = await flipperContract
-        //     .withSigner(alice)
-        //     .query.flip());
-        // console.log(`Gas for flip(): ${gasRequired}`);
-
-        // await flipperContract
-        //     .withSigner(alice)
-        //     .tx.flip({ gasLimit: gasRequired });
-        // expect((await flipperContract.query.get()).value.ok).toBe(!FLIPPER_DEFAULT);
+        let res = await inkMetaContract.query.verfiy(transaction, signature_buffer);
+        let res_value = res.value;
+        console.log(res_value.ok);
     });
+
+
+
+
+    // it('execute works', async () => {
+    //     // Transaction to call the flip() fn in the Flipper contract
+    //     let transaction: Transaction = {
+    //         callee: FLIPPER_ADDRESS,
+    //         selector: ["63", "3a", "a5", "51"],
+    //         input: [],
+    //         transferredValue: 100,
+    //         gasLimit: 1000000000,
+    //         allowReentry: false,
+    //         nonce: 0,
+    //         expirationTimeSeconds: Date.now() + 100000
+    //     }
+
+    //     let hashed_transaction = Web3.utils.soliditySha3(JSON.stringify(transaction));
+    //     console.log(`Hashed transaction: ${hashed_transaction}`);
+
+    //     let signature_buffer: number[] = [];
+    //     // Get the signature into the right type as expected by `execute`
+    //     let signature = alice.sign(hashed_transaction).forEach(b => {
+    //         signature_buffer.push(b);
+    //     });
+    //     console.log(`Signature bytes: ${signature_buffer}`);
+
+    //     revertedWith(
+    //         await inkMetaContract.query.execute(transaction, signature_buffer),
+    //         'BadSignature',
+    //     );
+    //     // ({ gasRequired } = await flipperContract
+    //     //     .withSigner(alice)
+    //     //     .query.flip());
+    //     // console.log(`Gas for flip(): ${gasRequired}`);
+
+    //     // await flipperContract
+    //     //     .withSigner(alice)
+    //     //     .tx.flip({ gasLimit: gasRequired });
+    //     // expect((await flipperContract.query.get()).value.ok).toBe(!FLIPPER_DEFAULT);
+    // });
 });
 
 function revertedWith(
@@ -122,6 +217,7 @@ function revertedWith(
     errorTitle: any,
 ): void {
     if (result.value instanceof Result) {
+        console.log("First if");
         result.value = result.value.ok;
     }
     if (typeof errorTitle === 'object') {

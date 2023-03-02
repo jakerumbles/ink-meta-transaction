@@ -20,5 +20,5 @@ export default async function setupApi(): Promise<void> {
 
 
 
-    globalThis.setup = { api, alice, bob };
+    globalThis.setup = { api, keyring, alice, bob };
 }
