@@ -115,6 +115,9 @@ describe('Ink Meta Transaction', () => {
         });
         console.log(decoded_addr_arr);
 
+        console.log(`Alice pub key: ${alice.publicKey}`);
+        console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
+
         let selector: number[] = [99, 58, 165, 81];
         let input: number[] = [];
         let transferredValue: number = 100;
@@ -167,10 +170,12 @@ describe('Ink Meta Transaction', () => {
 
         let signature_buffer: number[] = [];
         // Get the signature into the right type as expected by `execute` or `verify`
-        let signature = alice.sign(hashed_transaction).forEach(b => {
+        let signature = alice.sign(hashed_transaction);
+        signature.forEach(b => {
             signature_buffer.push(b);
         });
-        console.log(`Signature bytes: ${signature_buffer}`);
+
+        console.log(`Signature buffer: ${signature_buffer}`);
 
         let res = await inkMetaContract.query.verfiy(transaction, signature_buffer);
         let res_value = res.value;

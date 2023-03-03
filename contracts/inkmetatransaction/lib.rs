@@ -104,6 +104,13 @@ mod inkmetatransaction {
                     let caller = self.env().caller();
                     let acc_id = Self::to_default_account_id(pub_key);
 
+                    ink::env::debug_println!(
+                        "pub key: {:?}\ncaller: {:?}\nacc_id: {:?}",
+                        pub_key,
+                        caller,
+                        acc_id
+                    );
+
                     let expected_nonce = self.get_nonce(caller);
 
                     // Is the message signed by the same account that sent it?
