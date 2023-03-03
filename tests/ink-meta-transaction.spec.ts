@@ -2,6 +2,7 @@
 import { ApiPromise } from "@polkadot/api";
 import { Keyring } from '@polkadot/keyring';
 import { KeyringPair } from '@polkadot/keyring/types';
+import * as crypto from '@polkadot/util-crypto';
 import InkMetaConstructor from "../typechain-generated/constructors/inkmetatransaction";
 import InkMetaContract from "../typechain-generated/contracts/inkmetatransaction";
 import FlipperConstructor from "../typechain-generated/constructors/flipper";
@@ -114,50 +115,58 @@ describe('Ink Meta Transaction', () => {
         });
         console.log(decoded_addr_arr);
 
+        let selector: number[] = [99, 58, 165, 81];
+        let input: number[] = [];
+        let transferredValue: number = 100;
+        let gasLimit: number = 1000000000;
+        let allowReentry: boolean = false;
+        let nonce: number = 0;
+        let expirationTimeSeconds: number = 1677782453176 + 100000000;
+
         // Transaction to call the flip() fn in the Flipper contract
         let transaction: Transaction = {
             callee: decoded_addr_arr,
-            selector: ["63", "3a", "a5", "51"],
-            input: [],
-            transferredValue: 100,
-            gasLimit: 1000000000,
-            allowReentry: false,
-            nonce: 0,
-            expirationTimeSeconds: 1677782453176 + 100000000
+            selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
+            input: input,
+            transferredValue: transferredValue,
+            gasLimit: gasLimit,
+            allowReentry: allowReentry,
+            nonce: nonce,
+            expirationTimeSeconds: expirationTimeSeconds
         }
 
-
-
         const $transaction_codec = $.object(
-            $.field("callee", $.array($.u8)),
-            // $.field("selector", $.array($.str)),
-            // $.field("input", $.array($.str)),
-            // $.field("transferredValue", $.u128),
-            // $.field("gasLimit", $.u64),
-            // $.field("allowReentry", $.bool),
-            // $.field("nonce", $.u128),
-            // $.field("expirationTimeSeconds", $.u64)
+            $.field("callee", $.sizedUint8Array(32)),
+            $.field("selector", $.sizedUint8Array(4)),
+            $.field("input", $.uint8Array),
+            $.field("transferredValue", $.u128),
+            $.field("gasLimit", $.u64),
+            $.field("allowReentry", $.bool),
+            $.field("nonce", $.u128),
+            $.field("expirationTimeSeconds", $.u64)
         );
 
         let transaction_for_encoding = {
-            callee: decoded_addr_arr,
-            // selector: ["63", "3a", "a5", "51"],
-            // input: [],
-            // transferredValue: BigInt(100),
-            // gasLimit: BigInt(1000000000),
-            // allowReentry: false,
-            // nonce: BigInt(0),
-            // expirationTimeSeconds: BigInt(1677782453176 + 100000000)
+            callee: decoded_address,
+            selector: Uint8Array.from(selector),
+            input: Uint8Array.from(input),
+            transferredValue: BigInt(transferredValue),
+            gasLimit: BigInt(gasLimit),
+            allowReentry: transaction.allowReentry,
+            nonce: BigInt(nonce),
+            expirationTimeSeconds: BigInt(expirationTimeSeconds)
         }
 
         let encoded_transaction = $transaction_codec.encode(transaction_for_encoding);
         console.log(`Encoded transaction Uint8Array: ${encoded_transaction}`);
+        console.log(`Encoded transaction toString(): ${encoded_transaction.toString()}`);
 
-        let hashed_transaction = Web3.utils.soliditySha3(encoded_transaction.toString());
+        // let hashed_transaction = Web3.utils.soliditySha3(encoded_transaction.toString());
+        let hashed_transaction = crypto.keccak256AsU8a(encoded_transaction);
         console.log(`Hashed transaction: ${hashed_transaction}`);
 
         let signature_buffer: number[] = [];
-        // Get the signature into the right type as expected by `execute`
+        // Get the signature into the right type as expected by `execute` or `verify`
         let signature = alice.sign(hashed_transaction).forEach(b => {
             signature_buffer.push(b);
         });
