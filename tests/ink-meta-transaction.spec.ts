@@ -33,7 +33,16 @@ describe('Ink Meta Transaction', () => {
 
     let gasRequired: WeightV2;
 
-
+    const $transaction_codec = $.object(
+        $.field("callee", $.sizedUint8Array(32)),
+        $.field("selector", $.sizedUint8Array(4)),
+        $.field("input", $.uint8Array),
+        $.field("transferredValue", $.u128),
+        $.field("gasLimit", $.u64),
+        $.field("allowReentry", $.bool),
+        $.field("nonce", $.u128),
+        $.field("expirationTimeSeconds", $.u64)
+    );
 
     // let transaction: Transaction = {
     //     callee: FLIPPER_ADDRESS,
@@ -138,17 +147,6 @@ describe('Ink Meta Transaction', () => {
             expirationTimeSeconds: expirationTimeSeconds
         }
 
-        const $transaction_codec = $.object(
-            $.field("callee", $.sizedUint8Array(32)),
-            $.field("selector", $.sizedUint8Array(4)),
-            $.field("input", $.uint8Array),
-            $.field("transferredValue", $.u128),
-            $.field("gasLimit", $.u64),
-            $.field("allowReentry", $.bool),
-            $.field("nonce", $.u128),
-            $.field("expirationTimeSeconds", $.u64)
-        );
-
         let transaction_for_encoding = {
             callee: decoded_address,
             selector: Uint8Array.from(selector),
@@ -176,6 +174,9 @@ describe('Ink Meta Transaction', () => {
         });
 
         console.log(`Signature buffer: ${signature_buffer}`);
+
+        const isValid = alice.verify(hashed_transaction, signature, alice.publicKey);
+        console.log(`isValid: ${isValid}`);
 
         let res = await inkMetaContract.query.verfiy(transaction, signature_buffer);
         let res_value = res.value;
