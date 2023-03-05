@@ -163,19 +163,20 @@ describe('Ink Meta Transaction', () => {
         console.log(`Encoded transaction toString(): ${encoded_transaction.toString()}`);
 
         // let hashed_transaction = Web3.utils.soliditySha3(encoded_transaction.toString());
-        let hashed_transaction = crypto.keccak256AsU8a(encoded_transaction);
-        console.log(`Hashed transaction: ${hashed_transaction}`);
+        // let hashed_transaction = crypto.keccak256AsU8a(encoded_transaction);
+        // let hashed_transaction = crypto.blake2AsU8a(encoded_transaction);
+        // console.log(`Hashed transaction: ${hashed_transaction}`);
 
         let signature_buffer: number[] = [];
         // Get the signature into the right type as expected by `execute` or `verify`
-        let signature = alice.sign(hashed_transaction);
+        let signature = alice.sign(encoded_transaction);
         signature.forEach(b => {
             signature_buffer.push(b);
         });
 
-        console.log(`Signature buffer: ${signature_buffer}`);
+        console.log(`Signature buffer: ${signature_buffer.length}`);
 
-        const isValid = alice.verify(hashed_transaction, signature, alice.publicKey);
+        const isValid = alice.verify(encoded_transaction, signature, alice.publicKey);
         console.log(`isValid: ${isValid}`);
 
         let res = await inkMetaContract.query.verfiy(transaction, signature_buffer);

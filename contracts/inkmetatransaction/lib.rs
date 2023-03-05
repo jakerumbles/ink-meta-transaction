@@ -95,7 +95,7 @@ mod inkmetatransaction {
             let encoded_msg: Vec<u8> = req.encode();
             ink::env::debug_println!("Encoded message Vec<u8>: {:?}", encoded_msg);
             // let message_hash = Keccak256::digest(encoded_msg).to_vec();
-            let message_hash = Self::keccak256_hash(encoded_msg);
+            let message_hash = Self::blake2x256_hash(encoded_msg);
             ink::env::debug_println!("32 byte message hash: {:?}", message_hash);
 
             match self.env().ecdsa_recover(&signature, &message_hash) {
@@ -180,11 +180,11 @@ mod inkmetatransaction {
             output.into()
         }
 
-        fn keccak256_hash(bytes: Vec<u8>) -> [u8; 32] {
+        fn blake2x256_hash(bytes: Vec<u8>) -> [u8; 32] {
             use ink::env::hash;
 
-            let mut output = <hash::Keccak256 as hash::HashOutput>::Type::default();
-            ink::env::hash_bytes::<hash::Keccak256>(&bytes[..], &mut output);
+            let mut output = <hash::Blake2x256 as hash::HashOutput>::Type::default();
+            ink::env::hash_bytes::<hash::Blake2x256>(&bytes[..], &mut output);
 
             output
         }
