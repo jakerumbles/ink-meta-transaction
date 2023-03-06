@@ -79,82 +79,78 @@ describe('Ink Meta Transaction', () => {
         expect((await flipperContract.query.get()).value.ok).toBe(!FLIPPER_DEFAULT);
     });
 
-    // it('verify works', async () => {
-    //     // const $transaction_codec = $.object(
-    //     //     $.field("callee", $.str),
-    //     //     $.field("selector", $.array($.str)),
-    //     //     $.field("input", $.array($.str)),
-    //     //     $.field("transferredValue", $.u128),
-    //     //     $.field("gasLimit", $.u64),
-    //     //     $.field("allowReentry", $.bool),
-    //     //     $.field("nonce", $.u128),
-    //     //     $.field("expirationTimeSeconds", $.u64)
-    //     // );
+    it('verify works', async () => {
+        // const $transaction_codec = $.object(
+        //     $.field("callee", $.str),
+        //     $.field("selector", $.array($.str)),
+        //     $.field("input", $.array($.str)),
+        //     $.field("transferredValue", $.u128),
+        //     $.field("gasLimit", $.u64),
+        //     $.field("allowReentry", $.bool),
+        //     $.field("nonce", $.u128),
+        //     $.field("expirationTimeSeconds", $.u64)
+        // );
 
 
-    //     let decoded_address = keyring.decodeAddress(FLIPPER_ADDRESS);
-    //     console.log(decoded_address);
+        let decoded_address = keyring.decodeAddress(FLIPPER_ADDRESS);
+        console.log(decoded_address);
 
-    //     let decoded_addr_arr: number[] = [];
-    //     decoded_address.forEach(b => {
-    //         decoded_addr_arr.push(b);
-    //     });
-    //     console.log(decoded_addr_arr);
+        let decoded_addr_arr: number[] = [];
+        decoded_address.forEach(b => {
+            decoded_addr_arr.push(b);
+        });
+        console.log(decoded_addr_arr);
 
-    //     console.log(`Alice pub key: ${alice.publicKey}`);
-    //     console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
+        console.log(`Alice pub key: ${alice.publicKey}`);
+        console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
 
-    //     let selector: number[] = [99, 58, 165, 81];
-    //     let input: number[] = [];
-    //     let transferredValue: number = 100;
-    //     let gasLimit: number = 1000000000;
-    //     let allowReentry: boolean = false;
-    //     let nonce: number = 0;
-    //     let expirationTimeSeconds: number = 1677782453176 + 100000000;
+        let selector: number[] = [99, 58, 165, 81];
+        let input: number[] = [];
+        let transferredValue: number = 0;
+        let gasLimit: number = 1000000000;
+        let allowReentry: boolean = false;
+        let nonce: number = 0;
+        // let expirationTimeSeconds: number = 1677782453176 + 100000000;
+        let expirationTimeSeconds: number = Date.now() + 100000000;
 
-    //     // Transaction to call the flip() fn in the Flipper contract
-    //     let transaction: Transaction = {
-    //         callee: decoded_addr_arr,
-    //         selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
-    //         input: input,
-    //         transferredValue: transferredValue,
-    //         gasLimit: gasLimit,
-    //         allowReentry: allowReentry,
-    //         nonce: nonce,
-    //         expirationTimeSeconds: expirationTimeSeconds
-    //     }
+        // Transaction to call the flip() fn in the Flipper contract
+        let transaction: Transaction = {
+            callee: decoded_addr_arr,
+            selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
+            input: input,
+            transferredValue: transferredValue,
+            gasLimit: gasLimit,
+            allowReentry: allowReentry,
+            nonce: nonce,
+            expirationTimeSeconds: expirationTimeSeconds
+        }
 
-    //     let transaction_for_encoding = {
-    //         callee: decoded_address,
-    //         selector: Uint8Array.from(selector),
-    //         input: Uint8Array.from(input),
-    //         transferredValue: BigInt(transferredValue),
-    //         gasLimit: BigInt(gasLimit),
-    //         allowReentry: transaction.allowReentry,
-    //         nonce: BigInt(nonce),
-    //         expirationTimeSeconds: BigInt(expirationTimeSeconds)
-    //     }
+        let transaction_for_encoding = {
+            callee: decoded_address,
+            selector: Uint8Array.from(selector),
+            input: Uint8Array.from(input),
+            transferredValue: BigInt(transferredValue),
+            gasLimit: BigInt(gasLimit),
+            allowReentry: transaction.allowReentry,
+            nonce: BigInt(nonce),
+            expirationTimeSeconds: BigInt(expirationTimeSeconds)
+        }
 
-    //     let encoded_transaction = $transaction_codec.encode(transaction_for_encoding);
-    //     console.log(`Encoded transaction Uint8Array: ${encoded_transaction}`);
-    //     console.log(`Encoded transaction toString(): ${encoded_transaction.toString()}`);
+        let encoded_transaction = $transaction_codec.encode(transaction_for_encoding);
+        console.log(`Encoded transaction Uint8Array: ${encoded_transaction}`);
+        console.log(`Encoded transaction toString(): ${encoded_transaction.toString()}`);
 
-    //     // let hashed_transaction = Web3.utils.soliditySha3(encoded_transaction.toString());
-    //     // let hashed_transaction = crypto.keccak256AsU8a(encoded_transaction);
-    //     // let hashed_transaction = crypto.blake2AsU8a(encoded_transaction);
-    //     // console.log(`Hashed transaction: ${hashed_transaction}`);
+        let signature = alice.sign(encoded_transaction);
 
-    //     let signature = alice.sign(encoded_transaction);
+        console.log(`Signature: ${Array.from(signature).length}`);
 
-    //     console.log(`Signature: ${Array.from(signature).length}`);
+        const isValid = alice.verify(encoded_transaction, signature, alice.publicKey);
+        console.log(`isValid: ${isValid}`);
 
-    //     const isValid = alice.verify(encoded_transaction, signature, alice.publicKey);
-    //     console.log(`isValid: ${isValid}`);
-
-    //     let res = await inkMetaContract.query.verfiy(transaction, Array.from(signature));
-    //     let res_value = res.value;
-    //     console.log(res_value.ok);
-    // });
+        let res = await inkMetaContract.query.verfiy(transaction, Array.from(signature));
+        console.log(res.value.ok);
+        expect(res.value.ok == true);
+    });
 
 
     it('execute works', async () => {

@@ -115,13 +115,13 @@ mod inkmetatransaction {
 
                     // Is the message signed by the same account that sent it?
                     // And does the transacation have the expected nonce?
-                    // if expected_nonce == req.nonce && acc_id == caller_bytes {
                     if expected_nonce != req.nonce {
                         return Err(Error::IncorrectNonce);
                     }
                     if acc_id != caller {
                         return Err(Error::IncorrectSignature);
                     } else {
+                        ink::env::debug_println!("AccountId {:?}\nCaller: {:?}", acc_id, caller);
                         return Ok(true);
                     }
                 }
