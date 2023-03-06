@@ -1,4 +1,3 @@
-// import { expect } from '@jest/globals';
 import { ApiPromise } from "@polkadot/api";
 import { Keyring } from '@polkadot/keyring';
 import { KeyringPair } from '@polkadot/keyring/types';
@@ -8,9 +7,7 @@ import InkMetaContract from "../typechain-generated/contracts/inkmetatransaction
 import FlipperConstructor from "../typechain-generated/constructors/flipper";
 import FlipperContract from "../typechain-generated/contracts/flipper";
 import { Transaction, Error } from "../typechain-generated/types-arguments/inkmetatransaction";
-
 import * as $ from "scale-codec"
-import { Result } from '@727-ventures/typechain-types';
 import type { WeightV2 } from '@polkadot/types/interfaces';
 
 
@@ -80,26 +77,8 @@ describe('Ink Meta Transaction', () => {
     });
 
     it('verify works', async () => {
-        // const $transaction_codec = $.object(
-        //     $.field("callee", $.str),
-        //     $.field("selector", $.array($.str)),
-        //     $.field("input", $.array($.str)),
-        //     $.field("transferredValue", $.u128),
-        //     $.field("gasLimit", $.u64),
-        //     $.field("allowReentry", $.bool),
-        //     $.field("nonce", $.u128),
-        //     $.field("expirationTimeSeconds", $.u64)
-        // );
-
-
         let decoded_address = keyring.decodeAddress(FLIPPER_ADDRESS);
         console.log(decoded_address);
-
-        let decoded_addr_arr: number[] = [];
-        decoded_address.forEach(b => {
-            decoded_addr_arr.push(b);
-        });
-        console.log(decoded_addr_arr);
 
         console.log(`Alice pub key: ${alice.publicKey}`);
         console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
@@ -115,7 +94,7 @@ describe('Ink Meta Transaction', () => {
 
         // Transaction to call the flip() fn in the Flipper contract
         let transaction: Transaction = {
-            callee: decoded_addr_arr,
+            callee: Array.from(decoded_address),
             selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
             input: input,
             transferredValue: transferredValue,
@@ -148,8 +127,118 @@ describe('Ink Meta Transaction', () => {
         console.log(`isValid: ${isValid}`);
 
         let res = await inkMetaContract.query.verfiy(transaction, Array.from(signature));
-        console.log(res.value.ok);
-        expect(res.value.ok == true);
+        console.log(res.value.ok.err);
+        expect(res.value.ok.err == undefined);
+    });
+
+    it('verify: throws IncorrectNonce', async () => {
+        let decoded_address = keyring.decodeAddress(FLIPPER_ADDRESS);
+        console.log(decoded_address);
+
+        console.log(`Alice pub key: ${alice.publicKey}`);
+        console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
+
+        let selector: number[] = [99, 58, 165, 81];
+        let input: number[] = [];
+        let transferredValue: number = 0;
+        let gasLimit: number = 1000000000;
+        let allowReentry: boolean = false;
+        let nonce: number = 1;
+        // let expirationTimeSeconds: number = 1677782453176 + 100000000;
+        let expirationTimeSeconds: number = Date.now() + 100000000;
+
+        // Transaction to call the flip() fn in the Flipper contract
+        let transaction: Transaction = {
+            callee: Array.from(decoded_address),
+            selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
+            input: input,
+            transferredValue: transferredValue,
+            gasLimit: gasLimit,
+            allowReentry: allowReentry,
+            nonce: nonce,
+            expirationTimeSeconds: expirationTimeSeconds
+        }
+
+        let transaction_for_encoding = {
+            callee: decoded_address,
+            selector: Uint8Array.from(selector),
+            input: Uint8Array.from(input),
+            transferredValue: BigInt(transferredValue),
+            gasLimit: BigInt(gasLimit),
+            allowReentry: transaction.allowReentry,
+            nonce: BigInt(nonce),
+            expirationTimeSeconds: BigInt(expirationTimeSeconds)
+        }
+
+        let encoded_transaction = $transaction_codec.encode(transaction_for_encoding);
+        console.log(`Encoded transaction Uint8Array: ${encoded_transaction}`);
+        console.log(`Encoded transaction toString(): ${encoded_transaction.toString()}`);
+
+        let signature = alice.sign(encoded_transaction);
+
+        console.log(`Signature: ${Array.from(signature).length}`);
+
+        const isValid = alice.verify(encoded_transaction, signature, alice.publicKey);
+        console.log(`isValid: ${isValid}`);
+
+        let res = await inkMetaContract.query.verfiy(transaction, Array.from(signature));
+        console.log(res.value.ok.err);
+        expect(res.value.ok.err == Error.incorrectNonce);
+    });
+
+    it('verify: submit incorrect signature for transaction ', async () => {
+        let decoded_address = keyring.decodeAddress(FLIPPER_ADDRESS);
+        console.log(decoded_address);
+
+        console.log(`Alice pub key: ${alice.publicKey}`);
+        console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
+
+        let selector: number[] = [99, 58, 165, 81];
+        let input: number[] = [];
+        let transferredValue: number = 0;
+        let gasLimit: number = 1000000000;
+        let allowReentry: boolean = false;
+        let nonce: number = 0;
+        // let expirationTimeSeconds: number = 1677782453176 + 100000000;
+        let expirationTimeSeconds: number = Date.now() + 100000000;
+
+        // Transaction to call the flip() fn in the Flipper contract
+        let transaction: Transaction = {
+            callee: Array.from(decoded_address),
+            selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
+            input: input,
+            transferredValue: transferredValue,
+            gasLimit: gasLimit,
+            allowReentry: allowReentry,
+            nonce: nonce,
+            expirationTimeSeconds: expirationTimeSeconds
+        }
+
+        let transaction_for_encoding = {
+            callee: decoded_address,
+            selector: Uint8Array.from(selector),
+            input: Uint8Array.from(input),
+            transferredValue: BigInt(transferredValue),
+            gasLimit: BigInt(gasLimit),
+            allowReentry: transaction.allowReentry,
+            nonce: BigInt(nonce),
+            expirationTimeSeconds: BigInt(expirationTimeSeconds + 1)
+        }
+
+        let encoded_transaction = $transaction_codec.encode(transaction_for_encoding);
+        console.log(`Encoded transaction Uint8Array: ${encoded_transaction}`);
+        console.log(`Encoded transaction toString(): ${encoded_transaction.toString()}`);
+
+        let signature = alice.sign(encoded_transaction);
+
+        console.log(`Signature: ${Array.from(signature).length}`);
+
+        const isValid = alice.verify(encoded_transaction, signature, alice.publicKey);
+        console.log(`isValid: ${isValid}`);
+
+        let res = await inkMetaContract.query.verfiy(transaction, Array.from(signature));
+        console.log(res.value.ok.err);
+        expect(res.value.ok.err == Error.incorrectSignature);
     });
 
 
@@ -195,7 +284,7 @@ describe('Ink Meta Transaction', () => {
         console.log(`Encoded transaction Uint8Array: ${encoded_transaction}`);
 
         let signature = alice.sign(encoded_transaction);
-        console.log(`Signature: ${Array.from(signature).length}`);
+        console.log(`Signature length: ${Array.from(signature).length}`);
 
         const isValid = alice.verify(encoded_transaction, signature, alice.publicKey);
         console.log(`isValid: ${isValid}`);
@@ -217,7 +306,7 @@ describe('Ink Meta Transaction', () => {
         // Flip the value
         await inkMetaContract
             .withSigner(alice)
-            .tx.execute(transaction, Array.from(signature));
+            .tx.execute(transaction, Array.from(signature), { gasLimit: gasRequired, value: transferredValue });
 
         // Value should now be the flipped value of `flipper_value`
         console.log(`flipper value after tx.flip(): ${(await flipperContract.query.get()).value.ok}`);
@@ -227,27 +316,111 @@ describe('Ink Meta Transaction', () => {
         let incremented_nonce = (await inkMetaContract.query.getNonce(alice.address)).value.ok.toNumber();
         console.log(`incremented_nonce: ${incremented_nonce}`);
         expect(incremented_nonce == 1);
+    });
 
-        // ---- Test TransactionExpired error ----
-        // Change and nonce expiration on transaction
-        nonce = nonce + 1;
-        transaction.nonce = nonce;
-        transaction_for_encoding.nonce = BigInt(nonce);
+    it('execute: throws TransactionExpired', async () => {
+        let decoded_address = keyring.decodeAddress(FLIPPER_ADDRESS);
+        console.log(decoded_address);
 
-        expirationTimeSeconds = Date.now() - 1000000;
-        transaction.expirationTimeSeconds = expirationTimeSeconds;
-        transaction_for_encoding.expirationTimeSeconds = BigInt(expirationTimeSeconds);
+        console.log(`Alice pub key: ${alice.publicKey}`);
+        console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
+
+        let selector: number[] = [99, 58, 165, 81];
+        let input: number[] = [];
+        let transferredValue: number = 0;
+        let gasLimit: number = 1000000000;
+        let allowReentry: boolean = false;
+        let nonce: number = 0;
+        let expirationTimeSeconds: number = Date.now() - 1000000;
+
+        // Transaction to call the flip() fn in the Flipper contract
+        let transaction: Transaction = {
+            callee: Array.from(decoded_address),
+            selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
+            input: input,
+            transferredValue: transferredValue,
+            gasLimit: gasLimit,
+            allowReentry: allowReentry,
+            nonce: nonce,
+            expirationTimeSeconds: expirationTimeSeconds
+        }
+
+        let transaction_for_encoding = {
+            callee: decoded_address,
+            selector: Uint8Array.from(selector),
+            input: Uint8Array.from(input),
+            transferredValue: BigInt(transferredValue),
+            gasLimit: BigInt(gasLimit),
+            allowReentry: transaction.allowReentry,
+            nonce: BigInt(nonce),
+            expirationTimeSeconds: BigInt(expirationTimeSeconds)
+        }
+
+        let encoded_transaction = $transaction_codec.encode(transaction_for_encoding);
+        console.log(`Encoded transaction Uint8Array: ${encoded_transaction}`);
+
+        let signature = alice.sign(encoded_transaction);
+        console.log(`Signature length: ${Array.from(signature).length}`);
+
+        const isValid = alice.verify(encoded_transaction, signature, alice.publicKey);
+        console.log(`isValid: ${isValid}`);
 
         // Transaction expired. 
         let expired_transaction = await inkMetaContract
             .query.execute(transaction, Array.from(signature));
 
-        console.log(`reused_transaction: ${expired_transaction.value.ok.err}`);
+        console.log(`expired_transaction: ${expired_transaction.value.ok.err}`);
         expect(expired_transaction.value.ok.err == Error.transactionExpired);
+    });
 
+    it('execute: throws ValueTransferredMismatch', async () => {
+        let decoded_address = keyring.decodeAddress(FLIPPER_ADDRESS);
+        console.log(decoded_address);
+
+        console.log(`Alice pub key: ${alice.publicKey}`);
+        console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
+
+        let selector: number[] = [99, 58, 165, 81];
+        let input: number[] = [];
+        let transferredValue: number = 0;
+        let gasLimit: number = 1000000000;
+        let allowReentry: boolean = false;
+        let nonce: number = 0;
+        let expirationTimeSeconds: number = Date.now() - 1000000;
+
+        // Transaction to call the flip() fn in the Flipper contract
+        let transaction: Transaction = {
+            callee: Array.from(decoded_address),
+            selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
+            input: input,
+            transferredValue: transferredValue,
+            gasLimit: gasLimit,
+            allowReentry: allowReentry,
+            nonce: nonce,
+            expirationTimeSeconds: expirationTimeSeconds
+        }
+
+        let transaction_for_encoding = {
+            callee: decoded_address,
+            selector: Uint8Array.from(selector),
+            input: Uint8Array.from(input),
+            transferredValue: BigInt(transferredValue),
+            gasLimit: BigInt(gasLimit),
+            allowReentry: transaction.allowReentry,
+            nonce: BigInt(nonce),
+            expirationTimeSeconds: BigInt(expirationTimeSeconds)
+        }
+
+        let encoded_transaction = $transaction_codec.encode(transaction_for_encoding);
+        console.log(`Encoded transaction Uint8Array: ${encoded_transaction}`);
+
+        let signature = alice.sign(encoded_transaction);
+        console.log(`Signature length: ${Array.from(signature).length}`);
+
+        const isValid = alice.verify(encoded_transaction, signature, alice.publicKey);
+        console.log(`isValid: ${isValid}`);
 
         // ---- Test ValueTransferredMismatch error ----
-        // Transaction expired. 
         let bad_value_transaction = await inkMetaContract
             .query.execute(transaction, Array.from(signature), { value: 1 });
 
@@ -256,20 +429,20 @@ describe('Ink Meta Transaction', () => {
     });
 });
 
-function revertedWith(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    result: { value: { err?: any } },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any,@typescript-eslint/explicit-module-boundary-types
-    errorTitle: any,
-): void {
-    if (result.value instanceof Result) {
-        console.log("First if");
-        result.value = result.value.ok;
-    }
-    if (typeof errorTitle === 'object') {
-        expect(result.value).toHaveProperty('err', errorTitle);
-    } else {
-        console.log(`Err: ${result.value.err}`);
-        expect(result.value.err).toHaveProperty(errorTitle);
-    }
-}
+// function revertedWith(
+//     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+//     result: { value: { err?: any } },
+//     // eslint-disable-next-line @typescript-eslint/no-explicit-any,@typescript-eslint/explicit-module-boundary-types
+//     errorTitle: any,
+// ): void {
+//     if (result.value instanceof Result) {
+//         console.log("First if");
+//         result.value = result.value.ok;
+//     }
+//     if (typeof errorTitle === 'object') {
+//         expect(result.value).toHaveProperty('err', errorTitle);
+//     } else {
+//         console.log(`Err: ${result.value.err}`);
+//         expect(result.value.err).toHaveProperty(errorTitle);
+//     }
+// }

@@ -89,7 +89,7 @@ mod inkmetatransaction {
         }
 
         #[ink(message)]
-        pub fn verfiy(&self, req: Transaction, signature: [u8; 65]) -> Result<bool, Error> {
+        pub fn verfiy(&self, req: Transaction, signature: [u8; 65]) -> Result<(), Error> {
             ink::env::debug_println!("req.callee: {:?}", req.callee);
 
             let encoded_msg: Vec<u8> = req.encode();
@@ -122,7 +122,7 @@ mod inkmetatransaction {
                         return Err(Error::IncorrectSignature);
                     } else {
                         ink::env::debug_println!("AccountId {:?}\nCaller: {:?}", acc_id, caller);
-                        return Ok(true);
+                        return Ok(());
                     }
                 }
                 Err(_) => return Err(Error::IncorrectSignature),
@@ -132,9 +132,7 @@ mod inkmetatransaction {
         #[ink(message, payable)]
         pub fn execute(&mut self, req: Transaction, signature: [u8; 65]) -> Result<(), Error> {
             // Signature must be correct
-            if let Err(_) = self.verfiy(req.clone(), signature.clone()) {
-                // return Err(Error::BadSignature);
-            }
+            let _ = self.verfiy(req.clone(), signature.clone());
 
             // Assert that the correct amount of tokens were sent to this contract instance with this fn call
             if self.env().transferred_value() != req.transferred_value {

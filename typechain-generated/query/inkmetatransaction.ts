@@ -46,13 +46,13 @@ export default class Methods {
 	*
 	* @param { ArgumentTypes.Transaction } req,
 	* @param { Array<(number | string | BN)> } signature,
-	* @returns { Result<boolean, ReturnTypes.LangError> }
+	* @returns { Result<Result<null, ReturnTypes.Error>, ReturnTypes.LangError> }
 	*/
 	"verfiy" (
 		req: ArgumentTypes.Transaction,
 		signature: Array<(number | string | BN)>,
 		__options ? : GasLimit,
-	): Promise< QueryReturnType< Result<boolean, ReturnTypes.LangError> > >{
+	): Promise< QueryReturnType< Result<Result<null, ReturnTypes.Error>, ReturnTypes.LangError> > >{
 		return queryOkJSON( this.__apiPromise, this.__nativeContract, this.__callerAddress, "verfiy", [req, signature], __options , (result) => { return handleReturnType(result, getTypeDescription(14, 'inkmetatransaction')); });
 	}
 
@@ -68,7 +68,7 @@ export default class Methods {
 		signature: Array<(number | string | BN)>,
 		__options ? : GasLimitAndRequiredValue,
 	): Promise< QueryReturnType< Result<Result<null, ReturnTypes.Error>, ReturnTypes.LangError> > >{
-		return queryOkJSON( this.__apiPromise, this.__nativeContract, this.__callerAddress, "execute", [req, signature], __options , (result) => { return handleReturnType(result, getTypeDescription(15, 'inkmetatransaction')); });
+		return queryOkJSON( this.__apiPromise, this.__nativeContract, this.__callerAddress, "execute", [req, signature], __options , (result) => { return handleReturnType(result, getTypeDescription(14, 'inkmetatransaction')); });
 	}
 
 }

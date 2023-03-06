@@ -22,6 +22,8 @@ export enum Error {
 	badSignature = 'BadSignature',
 	transactionFailed = 'TransactionFailed',
 	valueTransferMismatch = 'ValueTransferMismatch',
-	transactionExpired = 'TransactionExpired'
+	transactionExpired = 'TransactionExpired',
+	incorrectNonce = 'IncorrectNonce',
+	incorrectSignature = 'IncorrectSignature'
 }
 
