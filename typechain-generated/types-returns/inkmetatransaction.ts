@@ -8,6 +8,7 @@ export enum LangError {
 export type AccountId = string | number[]
 
 export type Transaction = {
+	from: AccountId,
 	callee: AccountId,
 	selector: Array<number>,
 	input: Array<number>,

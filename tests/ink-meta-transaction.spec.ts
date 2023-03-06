@@ -31,6 +31,7 @@ describe('Ink Meta Transaction', () => {
     let gasRequired: WeightV2;
 
     const $transaction_codec = $.object(
+        $.field("from", $.sizedUint8Array(32)),
         $.field("callee", $.sizedUint8Array(32)),
         $.field("selector", $.sizedUint8Array(4)),
         $.field("input", $.uint8Array),
@@ -83,6 +84,7 @@ describe('Ink Meta Transaction', () => {
         console.log(`Alice pub key: ${alice.publicKey}`);
         console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
 
+        let from: Uint8Array = alice.addressRaw;
         let selector: number[] = [99, 58, 165, 81];
         let input: number[] = [];
         let transferredValue: number = 0;
@@ -94,6 +96,7 @@ describe('Ink Meta Transaction', () => {
 
         // Transaction to call the flip() fn in the Flipper contract
         let transaction: Transaction = {
+            from: Array.from(from),
             callee: Array.from(decoded_address),
             selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
             input: input,
@@ -105,6 +108,7 @@ describe('Ink Meta Transaction', () => {
         }
 
         let transaction_for_encoding = {
+            from: from,
             callee: decoded_address,
             selector: Uint8Array.from(selector),
             input: Uint8Array.from(input),
@@ -119,6 +123,7 @@ describe('Ink Meta Transaction', () => {
         console.log(`Encoded transaction Uint8Array: ${encoded_transaction}`);
         console.log(`Encoded transaction toString(): ${encoded_transaction.toString()}`);
 
+        // The same account in transaction.from is the account that signs the transaction
         let signature = alice.sign(encoded_transaction);
 
         console.log(`Signature: ${Array.from(signature).length}`);
@@ -128,7 +133,7 @@ describe('Ink Meta Transaction', () => {
 
         let res = await inkMetaContract.query.verfiy(transaction, Array.from(signature));
         console.log(res.value.ok.err);
-        expect(res.value.ok.err == undefined);
+        expect(res.value.ok.err === undefined);
     });
 
     it('verify: throws IncorrectNonce', async () => {
@@ -138,6 +143,7 @@ describe('Ink Meta Transaction', () => {
         console.log(`Alice pub key: ${alice.publicKey}`);
         console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
 
+        let from = alice.addressRaw;
         let selector: number[] = [99, 58, 165, 81];
         let input: number[] = [];
         let transferredValue: number = 0;
@@ -149,6 +155,7 @@ describe('Ink Meta Transaction', () => {
 
         // Transaction to call the flip() fn in the Flipper contract
         let transaction: Transaction = {
+            from: Array.from(from),
             callee: Array.from(decoded_address),
             selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
             input: input,
@@ -160,6 +167,7 @@ describe('Ink Meta Transaction', () => {
         }
 
         let transaction_for_encoding = {
+            from: from,
             callee: decoded_address,
             selector: Uint8Array.from(selector),
             input: Uint8Array.from(input),
@@ -193,6 +201,7 @@ describe('Ink Meta Transaction', () => {
         console.log(`Alice pub key: ${alice.publicKey}`);
         console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
 
+        let from = alice.addressRaw;
         let selector: number[] = [99, 58, 165, 81];
         let input: number[] = [];
         let transferredValue: number = 0;
@@ -204,6 +213,7 @@ describe('Ink Meta Transaction', () => {
 
         // Transaction to call the flip() fn in the Flipper contract
         let transaction: Transaction = {
+            from: Array.from(from),
             callee: Array.from(decoded_address),
             selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
             input: input,
@@ -215,6 +225,7 @@ describe('Ink Meta Transaction', () => {
         }
 
         let transaction_for_encoding = {
+            from: from,
             callee: decoded_address,
             selector: Uint8Array.from(selector),
             input: Uint8Array.from(input),
@@ -222,6 +233,7 @@ describe('Ink Meta Transaction', () => {
             gasLimit: BigInt(gasLimit),
             allowReentry: transaction.allowReentry,
             nonce: BigInt(nonce),
+            // +1 TO MAKE DIFFERENT FROM SUBMITTED TRANSACTION. SIGNATURE WILL NOT MATCH
             expirationTimeSeconds: BigInt(expirationTimeSeconds + 1)
         }
 
@@ -249,6 +261,7 @@ describe('Ink Meta Transaction', () => {
         console.log(`Alice pub key: ${alice.publicKey}`);
         console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
 
+        let from = alice.addressRaw;
         let selector: number[] = [99, 58, 165, 81];
         let input: number[] = [];
         let transferredValue: number = 0;
@@ -259,6 +272,7 @@ describe('Ink Meta Transaction', () => {
 
         // Transaction to call the flip() fn in the Flipper contract
         let transaction: Transaction = {
+            from: Array.from(from),
             callee: Array.from(decoded_address),
             selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
             input: input,
@@ -270,6 +284,7 @@ describe('Ink Meta Transaction', () => {
         }
 
         let transaction_for_encoding = {
+            from: from,
             callee: decoded_address,
             selector: Uint8Array.from(selector),
             input: Uint8Array.from(input),
@@ -304,15 +319,22 @@ describe('Ink Meta Transaction', () => {
         expect(init_nonce == 0);
 
         // Flip the value
-        await inkMetaContract
-            .withSigner(alice)
+        // Important note: Bob calls execute, but it is alice's transaction inside that is executed
+        // In other words, Alice gives Bob her transaction to execute on her behalf
+        let res = await inkMetaContract
+            .withSigner(bob)
             .tx.execute(transaction, Array.from(signature), { gasLimit: gasRequired, value: transferredValue });
+
+        // Assert Executed event was emitted
+        console.log(res.events[0]);
+        expect(res.events[0].name == "Executed");
 
         // Value should now be the flipped value of `flipper_value`
         console.log(`flipper value after tx.flip(): ${(await flipperContract.query.get()).value.ok}`);
         expect((await flipperContract.query.get()).value.ok).toBe(!flipper_value);
 
         // Get incremented nonce
+        // Note: Alice's nonce is incremented, not Bob's
         let incremented_nonce = (await inkMetaContract.query.getNonce(alice.address)).value.ok.toNumber();
         console.log(`incremented_nonce: ${incremented_nonce}`);
         expect(incremented_nonce == 1);
@@ -325,6 +347,7 @@ describe('Ink Meta Transaction', () => {
         console.log(`Alice pub key: ${alice.publicKey}`);
         console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
 
+        let from = alice.addressRaw;
         let selector: number[] = [99, 58, 165, 81];
         let input: number[] = [];
         let transferredValue: number = 0;
@@ -335,6 +358,7 @@ describe('Ink Meta Transaction', () => {
 
         // Transaction to call the flip() fn in the Flipper contract
         let transaction: Transaction = {
+            from: Array.from(from),
             callee: Array.from(decoded_address),
             selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
             input: input,
@@ -346,6 +370,7 @@ describe('Ink Meta Transaction', () => {
         }
 
         let transaction_for_encoding = {
+            from: from,
             callee: decoded_address,
             selector: Uint8Array.from(selector),
             input: Uint8Array.from(input),
@@ -380,6 +405,7 @@ describe('Ink Meta Transaction', () => {
         console.log(`Alice pub key: ${alice.publicKey}`);
         console.log(`Alice address: ${keyring.decodeAddress(alice.address)}`);
 
+        let from = alice.addressRaw;
         let selector: number[] = [99, 58, 165, 81];
         let input: number[] = [];
         let transferredValue: number = 0;
@@ -390,6 +416,7 @@ describe('Ink Meta Transaction', () => {
 
         // Transaction to call the flip() fn in the Flipper contract
         let transaction: Transaction = {
+            from: Array.from(from),
             callee: Array.from(decoded_address),
             selector: selector /* [0x63, 0x3a, 0xa5, 0x51]*/,
             input: input,
@@ -401,6 +428,7 @@ describe('Ink Meta Transaction', () => {
         }
 
         let transaction_for_encoding = {
+            from: from,
             callee: decoded_address,
             selector: Uint8Array.from(selector),
             input: Uint8Array.from(input),

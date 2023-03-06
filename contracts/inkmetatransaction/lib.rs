@@ -24,6 +24,8 @@ mod inkmetatransaction {
         )
     )]
     pub struct Transaction {
+        /// The creator of the transaction. Should be the signer.
+        pub from: AccountId,
         /// The `AccountId` of the contract that is called in this transaction.
         pub callee: AccountId,
         /// The selector bytes that identifies the function of the callee that should be called.
@@ -39,6 +41,7 @@ mod inkmetatransaction {
         pub allow_reentry: bool,
         /// Submitted nonce. Must match what is expected on-chain or transaction is invalid.
         pub nonce: Nonce,
+        /// Transaction must be executed before this deadline or it becomes invalid
         pub expiration_time_seconds: Timestamp,
     }
 
@@ -53,6 +56,16 @@ mod inkmetatransaction {
         }
     }
 
+    /// A meta-transaction was executed
+    #[ink(event)]
+    pub struct Executed {
+        #[ink(topic)]
+        caller: AccountId,
+        #[ink(topic)]
+        callee: AccountId,
+        encoded_transaction: Transaction,
+    }
+
     /// Errors that can occur upon calling this contract.
     #[derive(Copy, Clone, Debug, PartialEq, Eq, scale::Encode, scale::Decode)]
     #[cfg_attr(feature = "std", derive(::scale_info::TypeInfo))]
@@ -61,7 +74,9 @@ mod inkmetatransaction {
         BadSignature,
         /// Returned if the call failed.
         TransactionFailed,
+        /// Token amount specified in transaction did not match tokens sent with `execute()` call
         ValueTransferMismatch,
+        /// Transaction submitted cannot be executed after it has expired (transaction.expiration_time_seconds)
         TransactionExpired,
         // Submitted nonce does match expected
         IncorrectNonce,
@@ -83,11 +98,13 @@ mod inkmetatransaction {
             }
         }
 
+        /// Get the nonce for the given account
         #[ink(message)]
         pub fn get_nonce(&self, address: AccountId) -> Nonce {
             self.nonces.get(address).unwrap_or(0 as Nonce)
         }
 
+        /// Verifies that a transaction matches its supplied signature.
         #[ink(message)]
         pub fn verfiy(&self, req: Transaction, signature: [u8; 65]) -> Result<(), Error> {
             ink::env::debug_println!("req.callee: {:?}", req.callee);
@@ -101,14 +118,14 @@ mod inkmetatransaction {
             match self.env().ecdsa_recover(&signature, &message_hash) {
                 Ok(pub_key) => {
                     // Match recovered pub_key with caller
-                    let caller = self.env().caller();
-                    let acc_id = Self::to_default_account_id(pub_key);
+                    let caller = req.from;
+                    let signer = Self::to_default_account_id(pub_key);
 
                     ink::env::debug_println!(
-                        "pub key: {:?}\ncaller: {:?}\nacc_id: {:?}",
+                        "pub key: {:?}\ncaller: {:?}\nsigner: {:?}",
                         pub_key,
                         caller,
-                        acc_id
+                        signer
                     );
 
                     let expected_nonce = self.get_nonce(caller);
@@ -118,10 +135,14 @@ mod inkmetatransaction {
                     if expected_nonce != req.nonce {
                         return Err(Error::IncorrectNonce);
                     }
-                    if acc_id != caller {
+                    if signer != caller {
                         return Err(Error::IncorrectSignature);
                     } else {
-                        ink::env::debug_println!("AccountId {:?}\nCaller: {:?}", acc_id, caller);
+                        ink::env::debug_println!(
+                            "MATCH\nCaller {:?}\nSigner: {:?}",
+                            caller,
+                            signer,
+                        );
                         return Ok(());
                     }
                 }
@@ -129,6 +150,8 @@ mod inkmetatransaction {
             }
         }
 
+        /// Call a meta transaction. The transaction calling this fn must contain a valid transaction inside it that is passed to this fn as `req`.
+        /// `req` will be verified by `verify` using the supplied `signature`. If the transaction is signed correctly, it will be executed.
         #[ink(message, payable)]
         pub fn execute(&mut self, req: Transaction, signature: [u8; 65]) -> Result<(), Error> {
             // Signature must be correct
@@ -144,12 +167,13 @@ mod inkmetatransaction {
                 return Err(Error::TransactionExpired);
             }
 
-            let caller = self.env().caller();
+            let caller = req.from;
             let updated_nonce = self.get_nonce(caller) + 1;
 
             // Signature is valid, so increase nonce and then execute transaction
             self.nonces.insert(caller, &updated_nonce);
 
+            // Run the transaction
             let result = build_call::<<Self as ::ink::env::ContractEnv>::Env>()
                 .call(req.callee)
                 .gas_limit(req.gas_limit)
@@ -162,7 +186,14 @@ mod inkmetatransaction {
                 .try_invoke();
 
             match result {
-                Ok(Ok(_)) => return Ok(()),
+                Ok(Ok(_)) => {
+                    self.env().emit_event(Executed {
+                        caller: caller,
+                        callee: req.callee,
+                        encoded_transaction: req,
+                    });
+                    return Ok(());
+                }
                 Err(e) => {
                     ink::env::debug_println!("Transaction error: {:?}", e);
                     return Err(Error::TransactionFailed);
@@ -171,6 +202,7 @@ mod inkmetatransaction {
             };
         }
 
+        /// Convert a compressed 33 byte ECDSA public key into a 32 byte Substrate address
         fn to_default_account_id(compressed_pub_key: [u8; 33]) -> ink::primitives::AccountId {
             use ink::env::hash;
 
@@ -180,6 +212,7 @@ mod inkmetatransaction {
             output.into()
         }
 
+        /// Compute the 32 byte Blake 256 hash of the supplied byte vector.
         fn blake2x256_hash(bytes: Vec<u8>) -> [u8; 32] {
             use ink::env::hash;
 
